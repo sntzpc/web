@@ -1,16 +1,17 @@
 // GANTI dengan URL Web App GAS Anda
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbxDcCRwjT-0Ujzy_0Dz3tKEyhybQtZ-1OENkigcJXeSvrjj6Bmn0BzJePr4WKoClsaahA/exec';
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbw3U-rPDyYkUuu5h9k2uVA0F2c-WH6GKnJrzgE3VgMMd9J7KelH9AU4l6CRjC4bfZxYQw/exec';
 
 const $ = (s)=> document.querySelector(s);
 const rupiah = (n)=> Number(n||0).toLocaleString('id-ID',{style:'currency',currency:'IDR',maximumFractionDigits:0});
 const safe   = (v)=> (v==null?'':String(v));
 
-function post(route, payload={}){
+function post(route, payload = {}){
+  // Hindari preflight: Content-Type simple
   return fetch(GAS_URL, {
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({route, ...payload})
-  }).then(r=>r.json());
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({ route, ...payload })
+  }).then(r => r.json());
 }
 
 async function syncActive(){
@@ -21,7 +22,8 @@ async function syncActive(){
   listRevenue();
 }
 async function listRevenue(){
-  const res = await post('revenue.list');
+  const url = GAS_URL + '?route=' + encodeURIComponent('revenue.list');
+  const res = await fetch(url, { method: 'GET' }).then(r=>r.json());
   const tbody = $('#tblRev tbody'); tbody.innerHTML = '';
   if(!res.ok){ tbody.innerHTML = `<tr><td colspan="10">Gagal baca: ${res.error||''}</td></tr>`; return; }
   const hdr = res.header||[], rows = res.data||[];
