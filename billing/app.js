@@ -1,42 +1,57 @@
-// GANTI dengan URL Web App GAS Anda
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbw3U-rPDyYkUuu5h9k2uVA0F2c-WH6GKnJrzgE3VgMMd9J7KelH9AU4l6CRjC4bfZxYQw/exec';
+// app.js — Hotspot Mini-Billing (Frontend)
+const GAS_URL = 'https://script.google.com/macros/s/AKfycby8xv2OwBGy8LpOFixi4-BHUeJlwp6ehFVaAlaEuXTPha-tEAqrQRgA8N3ijLi9Hdy9NQ/exec'; // <-- Ganti dgn Web App URL hasil deploy GAS
 
-const $ = (s)=> document.querySelector(s);
-const rupiah = (n)=> Number(n||0).toLocaleString('id-ID',{style:'currency',currency:'IDR',maximumFractionDigits:0});
-const safe   = (v)=> (v==null?'':String(v));
-
-function post(route, payload = {}){
-  // Hindari preflight: Content-Type simple
+const $ = (sel)=> document.querySelector(sel);
+function rupiah(n){
+  const v = Number(n||0);
+  return v.toLocaleString('id-ID', { style:'currency', currency:'IDR', maximumFractionDigits:0 });
+}
+function jsonPOST(route, payload={}){
   return fetch(GAS_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-    body: JSON.stringify({ route, ...payload })
-  }).then(r => r.json());
+    method:'POST',
+    headers:{ 'Content-Type':'application/json' },
+    body: JSON.stringify({ route, ...payload }),
+  }).then(r=>r.json());
 }
 
+async function saveConf(){
+  const host = $('#mtHost').value.trim();
+  const user = $('#mtUser').value.trim();
+  const pass = $('#mtPass').value;
+  if(!host || !user){ alert('Host dan username wajib diisi.'); return; }
+  const res = await jsonPOST('config.save', { host, user, pass });
+  if(res.ok){
+    $('#confNote').textContent = 'Konfigurasi tersimpan di server.';
+  } else {
+    $('#confNote').textContent = 'Gagal simpan: '+(res.error||'');
+  }
+}
 async function syncActive(){
   $('#syncMsg').textContent = 'Memproses…';
-  const res = await post('pull.active');
+  const res = await jsonPOST('pull.active',{});
   if(!res.ok){ $('#syncMsg').textContent = 'Gagal: ' + (res.error||''); return; }
-  $('#syncMsg').textContent = `Inserted ${res.inserted} baris. Total amount: ${rupiah(res.total_amount)}. Active now: ${res.active_count}.`;
-  listRevenue();
+  const msg = `Inserted ${res.inserted} baris baru. Total amount: ${rupiah(res.total_amount)}. Active now: ${res.active_count}.`;
+  $('#syncMsg').textContent = msg;
+  await listRevenue(); // refresh tabel
 }
 async function listRevenue(){
-  const url = GAS_URL + '?route=' + encodeURIComponent('revenue.list');
-  const res = await fetch(url, { method: 'GET' }).then(r=>r.json());
-  const tbody = $('#tblRev tbody'); tbody.innerHTML = '';
+  const res = await jsonPOST('revenue.list',{});
+  const tbody = $('#tblRev tbody');
+  tbody.innerHTML = '';
+  let total = 0;
   if(!res.ok){ tbody.innerHTML = `<tr><td colspan="10">Gagal baca: ${res.error||''}</td></tr>`; return; }
-  const hdr = res.header||[], rows = res.data||[];
-  const i = (k)=> hdr.indexOf(k);
-  const i_ts=i('ts'), i_user=i('user'), i_profile=i('profile'), i_price=i('price'),
-        i_login=i('login_time'), i_up=i('uptime'), i_addr=i('address'),
-        i_mac=i('mac_address'), i_cmt=i('comment');
-  let total=0;
-  rows.slice(-100).forEach((r,idx)=>{
+  const hdr = res.header || [];
+  const rows = res.data || [];
+  // map kolom
+  const idx = (name)=> hdr.indexOf(name);
+  const i_ts=idx('ts'), i_user=idx('user'), i_profile=idx('profile'), i_price=idx('price'),
+        i_login=idx('login_time'), i_up=idx('uptime'), i_addr=idx('address'),
+        i_mac=idx('mac_address'), i_cmt=idx('comment');
+  rows.slice(-100).forEach((r, i)=>{
     total += Number(r[i_price]||0);
     const tr = document.createElement('tr');
     tr.innerHTML = `
-      <td>${idx+1}</td>
+      <td>${i+1}</td>
       <td>${safe(r[i_ts])}</td>
       <td class="mono">${safe(r[i_user])}</td>
       <td>${safe(r[i_profile])}</td>
@@ -51,9 +66,12 @@ async function listRevenue(){
   });
   $('#sumTotal').textContent = rupiah(total);
 }
+function safe(v){ return (v==null)?'':String(v); }
 
 document.addEventListener('DOMContentLoaded', ()=>{
+  $('#btnSave').addEventListener('click', saveConf);
   $('#btnSync').addEventListener('click', syncActive);
-  $('#btnList').addEventListener('click', listRevenue);
+  $('#btnListRev').addEventListener('click', listRevenue);
+  // muat awal
   listRevenue();
 });
